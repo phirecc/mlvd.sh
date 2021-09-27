@@ -1,0 +1,58 @@
+#!/bin/sh
+alias print="printf \"\033[32m%s\n\033[0m\""
+conf_dir=/var/lib/mlvd
+
+is_connected() {
+	ip link show mlvd > /dev/null 2>&1
+	return
+}
+check_root() {
+	if [ "$(id -u)" -ne 0 ]; then
+		echo "This script must be run as root"
+		exit 1
+	fi
+}
+disconnect() {
+	print "Disconnecting..."
+	wg-quick down mlvd
+}
+connect() {
+	print "Finding best server..."
+	sel="$(curl -s https://api.mullvad.net/rpc/ -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":"0","method":"relay_list_v3"}' | jq ".result.countries[] | select(.name | ascii_downcase | contains(\"$1\" | ascii_downcase)).cities[].relays[] | select (.hostname | contains(\"wireguard\"))" | jq -s 'sort_by(.weight)[-1]')"
+
+	gateway="$(echo "$sel" | jq -r '.ipv4_addr_in')"
+	hostname="$(echo "$sel" | jq -r '.hostname')"
+	server_pubkey="$(echo "$sel" | jq -r '.tunnels.wireguard[0].public_key')"
+
+	print "Connecting to $hostname ($gateway)"
+	sed -e "s|SERVER_PUBKEY|$server_pubkey|" -e "s|SERVER_IP|$gateway|" $conf_dir/template.conf > /etc/wireguard/mlvd.conf
+
+	if is_connected; then
+		wg-quick strip mlvd | wg setconf mlvd /dev/stdin
+		wg set mlvd fwmark 0xca6c
+	else
+		wg-quick up mlvd
+	fi && print "Connected successfully!"
+}
+help() { cat << EOF
+Usage: mlvd [ c(onnect) | d(isconnect) ]
+
+connect:
+    mlvd c france
+disconnect:
+    mlvd d
+
+mlvd's files are in $conf_dir, edit template.conf to change WireGuard options
+
+HOW TO SETUP: Download a WireGuard config file from your account panel
+(https://mullvad.net/en/account/#/wireguard-config/) and copy
+its "PrivateKey" and "Address" values into $conf_dir/template.conf
+EOF
+	exit
+}
+
+case $1 in
+	c|connect) check_root; shift; connect "$@" ;;
+	d|disconnect) check_root; disconnect ;;
+	*) help ;;
+esac
