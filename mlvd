@@ -1,5 +1,8 @@
 #!/bin/sh
+set -e
 alias print="printf \"\033[32m%s\n\033[0m\""
+alias print_error="printf \"\033[31m%s\n\033[0m\""
+api="https://api.mullvad.net/app/v1"
 conf_dir=/var/lib/mlvd
 
 is_connected() {
@@ -17,7 +20,7 @@ disconnect() {
 	wg-quick down mlvd
 }
 get_active_relays() {
-    curl -s 'https://api.mullvad.net/app/v1/relays' | jq ".wireguard.relays[] | select(.active == true)"
+	curl -s "$api/relays" | jq ".wireguard.relays[] | select(.active == true)"
 }
 # TODO Cache relay list
 list_relays() {
@@ -25,8 +28,9 @@ list_relays() {
 }
 connect() {
 	print "Finding best server..."
-    # TODO Add randomness to server selection like the official client does
-	sel="$(get_active_relays | jq "select(.hostname | startswith(\"$1\" | ascii_downcase))" | jq -s 'sort_by(.weight)[-1]')"
+	# TODO Add randomness to server selection like the official client does
+	sel="$(get_active_relays | jq "select(.hostname | startswith(\"$1\" | ascii_downcase))" | jq -e -s 'sort_by(.weight)[-1]')"
+	[ $? -eq 0 ] || { print_error "Couldn't find server hostname starting with \"$1\""; exit 1; }
 
 	gateway="$(echo "$sel" | jq -r '.ipv4_addr_in')"
 	hostname="$(echo "$sel" | jq -r '.hostname')"
