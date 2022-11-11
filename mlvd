@@ -18,11 +18,11 @@ disconnect() {
 }
 connect() {
 	print "Finding best server..."
-	sel="$(curl -s https://api.mullvad.net/rpc/ -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":"0","method":"relay_list_v3"}' | jq ".result.countries[] | select(.name | ascii_downcase | contains(\"$1\" | ascii_downcase)).cities[].relays[] | select (.hostname | contains(\"wireguard\"))" | jq -s 'sort_by(.weight)[-1]')"
+	sel="$(curl -s 'https://api.mullvad.net/app/v1/relays' | jq ".wireguard.relays[] | select(.hostname | startswith(\"$1\" | ascii_downcase))" | jq -s 'sort_by(.weight)[-1]')"
 
 	gateway="$(echo "$sel" | jq -r '.ipv4_addr_in')"
 	hostname="$(echo "$sel" | jq -r '.hostname')"
-	server_pubkey="$(echo "$sel" | jq -r '.tunnels.wireguard[0].public_key')"
+	server_pubkey="$(echo "$sel" | jq -r '.public_key')"
 
 	print "Connecting to $hostname ($gateway)"
 	sed -e "s|SERVER_PUBKEY|$server_pubkey|" -e "s|SERVER_IP|$gateway|" $conf_dir/template.conf > /etc/wireguard/mlvd.conf
@@ -38,7 +38,12 @@ help() { cat << EOF
 Usage: mlvd [ c(onnect) | d(isconnect) ]
 
 connect:
-    mlvd c france
+    # any server in germany
+    mlvd c de
+    # a server in frankfurt
+    mlvd c de-fra
+    # a specific server
+    mlvd c de-fra-wg-402
 disconnect:
     mlvd d
 
