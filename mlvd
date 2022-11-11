@@ -16,15 +16,24 @@ disconnect() {
 	print "Disconnecting..."
 	wg-quick down mlvd
 }
+get_active_relays() {
+    curl -s 'https://api.mullvad.net/app/v1/relays' | jq ".wireguard.relays[] | select(.active == true)"
+}
+# TODO Cache relay list
+list_relays() {
+	get_active_relays | jq -r '.hostname + " (" + .provider + ")"'
+}
 connect() {
 	print "Finding best server..."
-	sel="$(curl -s 'https://api.mullvad.net/app/v1/relays' | jq ".wireguard.relays[] | select(.hostname | startswith(\"$1\" | ascii_downcase))" | jq -s 'sort_by(.weight)[-1]')"
+    # TODO Add randomness to server selection like the official client does
+	sel="$(get_active_relays | jq "select(.hostname | startswith(\"$1\" | ascii_downcase))" | jq -s 'sort_by(.weight)[-1]')"
 
 	gateway="$(echo "$sel" | jq -r '.ipv4_addr_in')"
 	hostname="$(echo "$sel" | jq -r '.hostname')"
+	provider="$(echo "$sel" | jq -r '.provider')"
 	server_pubkey="$(echo "$sel" | jq -r '.public_key')"
 
-	print "Connecting to $hostname ($gateway)"
+	print "Connecting to $hostname ($gateway, $provider)"
 	sed -e "s|SERVER_PUBKEY|$server_pubkey|" -e "s|SERVER_IP|$gateway|" $conf_dir/template.conf > /etc/wireguard/mlvd.conf
 
 	if is_connected; then
@@ -46,6 +55,8 @@ connect:
     mlvd c de-fra-wg-402
 disconnect:
     mlvd d
+list active servers:
+    mlvd l 
 
 mlvd's files are in $conf_dir, edit template.conf to change WireGuard options
 
@@ -59,5 +70,6 @@ EOF
 case $1 in
 	c|connect) check_root; shift; connect "$@" ;;
 	d|disconnect) check_root; disconnect ;;
+	l|list) list_relays ;;
 	*) help ;;
 esac
