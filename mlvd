@@ -48,10 +48,10 @@ connect() {
 	fi && print "Connected successfully!"
 }
 help() { cat << EOF
-Usage: mlvd [ c(onnect) | d(isconnect) ]
+Usage: mlvd [ c(onnect) | d(isconnect) | l(ist) ]
 
 connect:
-    # any server in germany
+    # a server in germany
     mlvd c de
     # a server in frankfurt
     mlvd c de-fra
