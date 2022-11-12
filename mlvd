@@ -1,5 +1,4 @@
 #!/bin/sh
-set -e
 alias print="printf \"\033[32m%s\n\033[0m\""
 alias print_error="printf \"\033[31m%s\n\033[0m\""
 api="https://api.mullvad.net/app/v1"
